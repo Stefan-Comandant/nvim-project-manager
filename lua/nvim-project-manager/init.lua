@@ -61,6 +61,11 @@ pickers.new(require"telescope.themes".get_dropdown(), {
             ---@type project
             local entry = action_state.get_selected_entry().value
             vim.cmd("cd " .. entry.root_dir)
+
+            local _, err = io.open("Session.vim", "r")
+            if err == nil then
+                vim.cmd("source " .. "Session.vim")
+            end
         end)
         return true
     end
