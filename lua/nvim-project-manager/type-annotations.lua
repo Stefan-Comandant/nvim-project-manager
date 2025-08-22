@@ -1,0 +1,11 @@
+---@class shell_cmd
+---@field cmd_name? string The title of the command(not what gets executed). When not present, the actual command will be displayed
+---@field cmd_string string The actual command that will be run
+
+---@class project
+---@field title string
+---@field description string?
+---@field used_technologies string[]?
+---@field commands shell_cmd[]?
+---@field dependencies string[]?
+---@field root_dir string
