@@ -18,4 +18,5 @@ local projects = {
     project,
 }
 
-require("nvim-project-manager.project_search").open_project_search_float(projects)
+require("nvim-project-manager.project_create")
+-- require("nvim-project-manager.project_search").open_project_search_float(projects)
