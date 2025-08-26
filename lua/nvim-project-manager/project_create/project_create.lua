@@ -1,10 +1,13 @@
 local popup = require("nui.popup")
 local layout = require("nui.layout")
 local input = require("nui.input")
+local tree = require("nui.tree")
 local trim_str = require("nvim-project-manager.utils").trim_str
 
+
+
 ---@type project
-local project = { title = "", root_dir = "" }
+local project = { title = "", root_dir = vim.uv.cwd() }
 
 ---This functions takes the submited value from the prompt and the project creation stage, then stores the data inside a single project variable, which will then be saved to disk
 ---@param value string The string that was typed into the prompt
@@ -143,7 +146,7 @@ local function get_project_field(create_stage, proj)
 end
 
 local function create_input()
-    return 
+    return
 end
 
 local project_fields = { "Title", "Description", "Useed Technologies", "Shell Commands", "Dependencies", "Root Directory"}
@@ -159,6 +162,10 @@ local input1 = input(popup_options, {
     on_change = function (value)
     end
 })
+
+local sh_cmd_prompt = require("nvim-project-manager.project_create.sh_cmd_prompt")
+
+sh_cmd_prompt.create_layout()
 
 local function create_input_component()
     return input(
@@ -230,4 +237,4 @@ local function render_input()
     input1:mount()
 end
 
-render_input()
+-- render_input()
