@@ -27,11 +27,17 @@ local function create_cmd_display_box()
 
     local popup1 = Popup(popup1_options)
 
-
-
     local box = Layout.Box()
 
     return box
+end
+
+local function component_map(components, modes, key, callbacks)
+    for _, comp in ipairs(components) do
+        for _, mode in ipairs(modes) do
+            comp:map(mode, key, callbacks)
+        end
+    end
 end
 
 local function expand_layout_with_prompt(cmd_display_popup, win_width, tree)
@@ -40,8 +46,6 @@ local function expand_layout_with_prompt(cmd_display_popup, win_width, tree)
     --      - one containing the command name(map <CR> and <C-l> to switching the cursor to the next input)
     --      - the other one containing the actual shell command
     -- use layout:update() to append the inputs, since it can take any valid nui component as argument
-    -- TODO: extract the popup with the command names to a variable and keep it inside every update of the layout. Place the two inputs below this popup. Organize this stuff a little, so it's not a huge mess
-    -- 
 
     local cur_win_index = 1
     local windows = {vim.api.nvim_get_current_win()}
@@ -81,15 +85,14 @@ local function expand_layout_with_prompt(cmd_display_popup, win_width, tree)
     cmd_title_input:on("WinEnter", function ()
         cur_win_index = 2
         windows[2] = vim.api.nvim_get_current_win()
-        -- print("New win: " .. windows[2] .. '\n')
-    end)
+    end, { once = true })
 
 
     cmd_content_input:on("WinEnter", function ()
         cur_win_index = 3
         windows[3] = vim.api.nvim_get_current_win()
-        -- print("New win: " .. windows[3] .. '\n')
-    end)
+    end, { once = true })
+
 
 
     local layout_opts = {
@@ -157,67 +160,44 @@ local function expand_layout_with_prompt(cmd_display_popup, win_width, tree)
     end)
 
 
-    cmd_title_input:map("i", "<C-l>", function ()
-        cur_win_index = cur_win_index + 1
-        vim.api.nvim_set_current_win(windows[cur_win_index])
-    end)
-
-    cmd_content_input:map("i", "<C-l>", function ()
+    component_map({ cmd_content_input, cmd_title_input}, { "n", "i", "v"}, "<C-l>", function ()
         if cur_win_index < #windows then
             cur_win_index = cur_win_index + 1
             vim.api.nvim_set_current_win(windows[cur_win_index])
         end
     end)
 
-    cmd_display_popup:map("i", "<C-l>", function ()
-        if cur_win_index < #windows then
-            cur_win_index = cur_win_index + 1
-            vim.api.nvim_set_current_win(windows[cur_win_index])
-        end
-    end)
 
-    cmd_title_input:map("i", "<CR>", function ()
+    -- cmd_display_popup:map("i", "<C-l>", function ()
+    --     if cur_win_index < #windows then
+    --         cur_win_index = cur_win_index + 1
+    --         vim.api.nvim_set_current_win(windows[cur_win_index])
+    --     end
+    -- end)
+
+    component_map({cmd_title_input, cmd_content_input }, { "i" }, "<CR>", function ()
         -- check if the two fields were filled in properly. If so, trim both values, store them inside the project and then update the display of commands
         local cmd_title = trim_str(vim.api.nvim_buf_get_lines(cmd_title_input.bufnr, 0, 1, false)[1], {" "})
         local cmd_content = trim_str(vim.api.nvim_buf_get_lines(cmd_content_input.bufnr, 0, 1, false)[1], {" "})
+
+        -- remove the "$ " from the value, since that part is just to signify a shell command inside the input
         cmd_content = cmd_content:sub(3, #cmd_content)
 
         if cur_project.commands ~= nil then
-            table.insert(cur_project.commands, {cmd_name = cmd_title, cmd_string = cmd_content})
+            cur_project.commands = table.insert(cur_project.commands, {cmd_name = cmd_title, cmd_string = cmd_content})
         else
-            cur_project.commands = {cmd_name = cmd_title, cmd_string = cmd_content}
+            cur_project.commands = { {cmd_name = cmd_title, cmd_string = cmd_content} }
             -- cur_project.commands 
             -- table.insert(cur_project.commands, {cmd_name = cmd_content, cmd_string = cmd_content})
         end
-        -- local cmd_content = vim.api.nvim_buf_get_lines(cmd_content_input.bufnr, 0, 1, false)[1]
-        -- cmd_title_input = trim
-
-        -- print("Hello world\n")
-        -- cmd_title = "build"
-        -- cmd_content = "make build"
 
         tree:add_node(Tree.Node({ text = cmd_title}, { Tree.Node({ text = cmd_content})}))
 
-
         tree:render()
-        -- cmd_display_popup:render()
 
-        -- local nodes = {}
+        vim.api.nvim_set_current_win(windows[1])
 
-
-        -- if project.commands ~= nil then
-        --     for _, v in pairs(project.commands) do
-        --         nodes:insert(Tree.Node({ text = v.cmd_name}, { Tree.Node({ text = v.cmd_string})})
-        --     )
-        -- end
-    -- end
-
-        -- local tree1 = Tree({
-        --     bufnr = popup1.bufnr,
-        --     nodes = nodes,
-        -- })
-
-        tree:render()
+        input_layout:unmount()
 
     end)
 
@@ -227,9 +207,9 @@ local function expand_layout_with_prompt(cmd_display_popup, win_width, tree)
 
 end
 
----comment
----@param project project
-local function create_layout(project)
+--- Opens the popup/layout for the `Shell Commands` creation stage of the project
+---@param project project The reference to the structure containing the data of the project that is currently being created/edited
+local function open_sh_cmd_prompt(project)
     ---@type string[]
     cur_project = project
 
@@ -268,35 +248,26 @@ local function create_layout(project)
 
 
     if project.commands ~= nil then
-        for _, v in pairs(project.commands) do
-            nodes:insert(Tree.Node({ text = v.cmd_name}, { Tree.Node({ text = v.cmd_string})})
+        for _, v in ipairs(project.commands) do
+            table.insert(nodes, Tree.Node({ text = v.cmd_name}, { Tree.Node({ text = v.cmd_string})})
         )
     end
 end
 
-    -- local node1 = Tree.Node({ text = "build"}, { Tree.Node({ text = "make build"})})
-    -- local node2 = Tree.Node({ text = "run"}, { Tree.Node({ text = "make run"})})
-    -- local node3 = Tree.Node({ text = "debug"}, { Tree.Node({ text = "make debug"})})
-    -- local nodes = {
-    --     node1,
-    --     node2,
-    --     node3,
-    -- }
-
-    local tree1 = Tree({
+    local tree = Tree({
         bufnr = popup1.bufnr,
         nodes = nodes,
     })
 
-    tree1:render()
+    tree:render()
 
     --[[
     -- TODO:
     -- add a keymapping for a(add cmd), e(edit cmd), v(view cmd, since we will only show a part of the cmd if it is long), d(delete cmd)
     --]]
-    popup1:on("CursorMoved", function ()
+    popup1:on({ "CursorMoved", "WinEnter" }, function ()
         local cursor_pos = vim.api.nvim_win_get_cursor(0)
-        nodes = tree1:get_nodes()
+        nodes = tree:get_nodes()
 
         for _, v in ipairs(nodes) do
             v:collapse()
@@ -306,7 +277,7 @@ end
             nodes[cursor_pos[1]]:expand()
         end
 
-        tree1:render()
+        tree:render()
         vim.api.nvim_buf_clear_namespace(popup1.bufnr, ns, 0, -1)
         vim.api.nvim_win_set_hl_ns(0, ns)
 
@@ -343,185 +314,7 @@ end
 
 
     popup1:map("n", "a", function ()
-        -- local cmd_title = "build"
-        -- local cmd_content = "make build"
-
-        -- tree1:add_node(Tree.Node({ text = cmd_title}, { Tree.Node({ text = cmd_content})}))
-
-
-        -- tree1:render()
-        -- cmd_display_popup:render()
-
-        expand_layout_with_prompt(popup1, win_width, tree1)
-
-        --[[
-
-
-        -- here we want to:
-        -- create two inputs
-        --      - one containing the command name(map <CR> and <C-l> to switching the cursor to the next input)
-        --      - the other one containing the actual shell command
-        -- use layout:update() to append the inputs, since it can take any valid nui component as argument
-        -- TODO: extract the popup with the command names to a variable and keep it inside every update of the layout. Place the two inputs below this popup. Organize this stuff a little, so it's not a huge mess
-
-
-
-        local cur_win_index = 1
-        local windows = {vim.api.nvim_get_current_win()}
-
-        local input_options_common = {
-                -- border = {
-                --     style="rounded",
-                --     text = {
-                --         top = "Command Title:"
-                --     }
-                -- },
-                position =
-                {
-                    row = 200,
-                    col = 100,
-                },
-
-                size =
-                {
-                    height = "90%",
-                    width = "80%",
-                }
-            }
-
-
-            local cmd_title_input_opt = input_options_common
-            cmd_title_input_opt.border = { style = "rounded", text = { top = "Command Title:"}}
-            local cmd_title_input = Input(
-                cmd_title_input_opt,
-                {
-                    prompt = "",
-                    default_value = ""
-                }
-            )
-
-
-            -- note: this copies the reference to the table. NOT THE VALUE
-            local cmd_content_input_opt = input_options_common
-            cmd_content_input_opt.border = { style = "rounded", text = { top = "Shell Command to run:"}}
-
-            local cmd_content_input = Input(
-                cmd_content_input_opt,
-                {
-                    prompt = "$ ",
-                    default_value = ""
-                }
-            )
-
-            cmd_title_input:on("WinEnter", function ()
-                cur_win_index = 2
-                windows[2] = vim.api.nvim_get_current_win()
-                print("New win: " .. windows[2] .. '\n')
-            end)
-
-
-            cmd_content_input:on("WinEnter", function ()
-                cur_win_index = 3
-                windows[3] = vim.api.nvim_get_current_win()
-                print("New win: " .. windows[3] .. '\n')
-            end)
-
-            cmd_title_input:map("i", "<C-h>", function ()
-                cur_win_index = cur_win_index - 1
-                vim.api.nvim_set_current_win(windows[cur_win_index])
-            end)
-            cmd_content_input:map("i", "<C-h>", function ()
-                cur_win_index = cur_win_index - 1
-                vim.api.nvim_set_current_win(windows[cur_win_index])
-            end)
-
-            local layout_opts = {
-                position = {
-                    col = "5%",
-                    row = 0,
-                },
-                size = {
-                    width = "30%",
-                    height = 10,
-                }
-            }
-
-            -- NOTE: each component is its own window, with a different window ID
-            -- Layout.Box(popup1, { size = { width = "30%", height = #lines + 2} }),
-
-            local input_layout = Layout({
-                size = { height = 10, width = "50%"},
-                anchor = "NW",
-                position = {
-                    -- the percentages are out of width and height of the layout
-                    col = 0.5 * win_width,
-                    row = 1,
-                },
-                relative = "editor",
-            },
-
-            Layout.Box(
-                {
-
-
-                    Layout.Box(
-                        {
-                            Layout.Box(
-                                -- cmd_title_input, { size = cmd_title_input_opt.size }),
-                                cmd_title_input, { size = { height = "50%", width = "100%"} }
-                            ),
-
-
-                            Layout.Box(
-                                cmd_content_input, { size = { height = "50%", width = "100%"} })
-                            },
-                            { dir = "col", size = {width = "80%", height = "100%" } }
-                        ),
-                    },
-
-                    {
-                        dir = "row",
-                        size = { height = 10, width = "100%"}
-                    }
-                )
-            )
-
-
-            input_layout:mount()
-
-            layout_comp:update(
-                layout_opts)
-                -- layout_opts<
-            --     Layout.Box(
-            --         {
-
-
-            --             Layout.Box(
-            --                 {
-            --                     Layout.Box(
-            --                         -- cmd_title_input, { size = cmd_title_input_opt.size }),
-            --                         cmd_title_input, { size = { height = "50%", width = "100%"} }
-            --                     ),
-
-
-            --                     Layout.Box(
-            --                         cmd_content_input, { size = { height = "50%", width = "100%"} })
-            --                     },
-            --                     { dir = "col", size = {width = "60%", height = 10 } }
-            --                 ),
-            --                 },
-
-
-            --                     dir = "row",
-            --                     -- size = { height = 10, width = "100%"}
-            --                 }
-            --             )
-            --         )
-
-            
-
-
-            --]]
+        expand_layout_with_prompt(popup1, win_width, tree)
 end, {})
 
 
@@ -531,8 +324,9 @@ end, {})
     vim.api.nvim_win_set_hl_ns(0, ns)
     vim.hl.range(popup1.bufnr, ns, high_group, { 1, 0}, { 1, -1}, { })
 
+    return popup1
 end
 
 return {
-    create_layout = create_layout
+    open_sh_cmd_prompt = open_sh_cmd_prompt
 }

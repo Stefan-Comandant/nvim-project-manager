@@ -130,4 +130,4 @@ local function get_project_field(proj, create_stage)
 end
 
 
-return { is_creating_project = is_creating_project }
+return { get_project_field = get_project_field, handle_input = handle_input }
