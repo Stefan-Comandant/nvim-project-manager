@@ -2,6 +2,10 @@ local Popup = require("nui.popup")
 local Layout = require("nui.layout")
 local Input = require("nui.input")
 local Tree = require("nui.tree")
+local trim_str = require("nvim-project-manager.utils").trim_str
+
+---@type project
+local cur_project = {title = "", root_dir = "", commands = {}}
 
 
 local lines = {
@@ -30,7 +34,7 @@ local function create_cmd_display_box()
     return box
 end
 
-local function expand_layout_with_prompt(cmd_display_popup, win_width)
+local function expand_layout_with_prompt(cmd_display_popup, win_width, tree)
     -- here we want to:
     -- create two inputs
     --      - one containing the command name(map <CR> and <C-l> to switching the cursor to the next input)
@@ -174,6 +178,46 @@ local function expand_layout_with_prompt(cmd_display_popup, win_width)
 
     cmd_title_input:map("i", "<CR>", function ()
         -- check if the two fields were filled in properly. If so, trim both values, store them inside the project and then update the display of commands
+        local cmd_title = trim_str(vim.api.nvim_buf_get_lines(cmd_title_input.bufnr, 0, 1, false)[1], {" "})
+        local cmd_content = trim_str(vim.api.nvim_buf_get_lines(cmd_content_input.bufnr, 0, 1, false)[1], {" "})
+        cmd_content = cmd_content:sub(3, #cmd_content)
+
+        if cur_project.commands ~= nil then
+            table.insert(cur_project.commands, {cmd_name = cmd_title, cmd_string = cmd_content})
+        else
+            cur_project.commands = {cmd_name = cmd_title, cmd_string = cmd_content}
+            -- cur_project.commands 
+            -- table.insert(cur_project.commands, {cmd_name = cmd_content, cmd_string = cmd_content})
+        end
+        -- local cmd_content = vim.api.nvim_buf_get_lines(cmd_content_input.bufnr, 0, 1, false)[1]
+        -- cmd_title_input = trim
+
+        -- print("Hello world\n")
+        -- cmd_title = "build"
+        -- cmd_content = "make build"
+
+        tree:add_node(Tree.Node({ text = cmd_title}, { Tree.Node({ text = cmd_content})}))
+
+
+        tree:render()
+        -- cmd_display_popup:render()
+
+        -- local nodes = {}
+
+
+        -- if project.commands ~= nil then
+        --     for _, v in pairs(project.commands) do
+        --         nodes:insert(Tree.Node({ text = v.cmd_name}, { Tree.Node({ text = v.cmd_string})})
+        --     )
+        -- end
+    -- end
+
+        -- local tree1 = Tree({
+        --     bufnr = popup1.bufnr,
+        --     nodes = nodes,
+        -- })
+
+        tree:render()
 
     end)
 
@@ -183,8 +227,11 @@ local function expand_layout_with_prompt(cmd_display_popup, win_width)
 
 end
 
-local function create_layout()
+---comment
+---@param project project
+local function create_layout(project)
     ---@type string[]
+    cur_project = project
 
     local popup1_options = {
         -- size = {
@@ -215,14 +262,26 @@ local function create_layout()
 
     vim.api.nvim_set_hl(ns, high_group, { reverse = true, bold = true })
 
-    local node1 = Tree.Node({ text = "build"}, { Tree.Node({ text = "make build"})})
-    local node2 = Tree.Node({ text = "run"}, { Tree.Node({ text = "make run"})})
-    local node3 = Tree.Node({ text = "debug"}, { Tree.Node({ text = "make debug"})})
-    local nodes = {
-        node1,
-        node2,
-        node3,
-    }
+    -- project.commands
+
+    local nodes = {}
+
+
+    if project.commands ~= nil then
+        for _, v in pairs(project.commands) do
+            nodes:insert(Tree.Node({ text = v.cmd_name}, { Tree.Node({ text = v.cmd_string})})
+        )
+    end
+end
+
+    -- local node1 = Tree.Node({ text = "build"}, { Tree.Node({ text = "make build"})})
+    -- local node2 = Tree.Node({ text = "run"}, { Tree.Node({ text = "make run"})})
+    -- local node3 = Tree.Node({ text = "debug"}, { Tree.Node({ text = "make debug"})})
+    -- local nodes = {
+    --     node1,
+    --     node2,
+    --     node3,
+    -- }
 
     local tree1 = Tree({
         bufnr = popup1.bufnr,
@@ -237,6 +296,7 @@ local function create_layout()
     --]]
     popup1:on("CursorMoved", function ()
         local cursor_pos = vim.api.nvim_win_get_cursor(0)
+        nodes = tree1:get_nodes()
 
         for _, v in ipairs(nodes) do
             v:collapse()
@@ -283,8 +343,16 @@ local function create_layout()
 
 
     popup1:map("n", "a", function ()
+        -- local cmd_title = "build"
+        -- local cmd_content = "make build"
 
-        expand_layout_with_prompt(popup1, win_width)
+        -- tree1:add_node(Tree.Node({ text = cmd_title}, { Tree.Node({ text = cmd_content})}))
+
+
+        -- tree1:render()
+        -- cmd_display_popup:render()
+
+        expand_layout_with_prompt(popup1, win_width, tree1)
 
         --[[
 

@@ -1,7 +1,7 @@
 local popup = require("nui.popup")
 local input = require("nui.input")
 
-local utils = require("nvim-project-manager.project_create.utils")
+local utils = require("nvim-project-manager.project_create.state_tracker")
 local handle_input = utils.handle_input
 local get_project_field = utils.get_project_field
 local trim_str = utils.trim_str
@@ -55,7 +55,7 @@ local input1 = input(popup_options, {
 
 local sh_cmd_prompt = require("nvim-project-manager.project_create.sh_cmd_prompt")
 
-sh_cmd_prompt.create_layout()
+sh_cmd_prompt.create_layout(project)
 
 local function create_input_component()
     return input(
@@ -78,7 +78,7 @@ local function create_input_component()
         },
         {
             prompt = "",
-            default_value = get_project_field(project_create_stage , project),
+            default_value = get_project_field(project, project_create_stage),
             -- on_close = function ()
             -- end,
             -- on_submit = function (value)
