@@ -30,6 +30,159 @@ local function create_cmd_display_box()
     return box
 end
 
+local function expand_layout_with_prompt(cmd_display_popup, win_width)
+    -- here we want to:
+    -- create two inputs
+    --      - one containing the command name(map <CR> and <C-l> to switching the cursor to the next input)
+    --      - the other one containing the actual shell command
+    -- use layout:update() to append the inputs, since it can take any valid nui component as argument
+    -- TODO: extract the popup with the command names to a variable and keep it inside every update of the layout. Place the two inputs below this popup. Organize this stuff a little, so it's not a huge mess
+    -- 
+
+    local cur_win_index = 1
+    local windows = {vim.api.nvim_get_current_win()}
+
+    local input_options_common = {
+        size =
+        {
+            height = "90%",
+            width = "80%",
+        }
+    }
+
+
+    local cmd_title_input_opt = input_options_common
+    cmd_title_input_opt.border = { style = "rounded", text = { top = "Command Title:"}}
+    local cmd_title_input = Input(
+        cmd_title_input_opt,
+        {
+            prompt = "",
+            default_value = ""
+        }
+    )
+
+
+    -- note: this copies the reference to the table. NOT THE VALUE
+    local cmd_content_input_opt = input_options_common
+    cmd_content_input_opt.border = { style = "rounded", text = { top = "Shell Command to run:"}}
+
+    local cmd_content_input = Input(
+        cmd_content_input_opt,
+        {
+            prompt = "$ ",
+            default_value = ""
+        }
+    )
+
+    cmd_title_input:on("WinEnter", function ()
+        cur_win_index = 2
+        windows[2] = vim.api.nvim_get_current_win()
+        -- print("New win: " .. windows[2] .. '\n')
+    end)
+
+
+    cmd_content_input:on("WinEnter", function ()
+        cur_win_index = 3
+        windows[3] = vim.api.nvim_get_current_win()
+        -- print("New win: " .. windows[3] .. '\n')
+    end)
+
+
+    local layout_opts = {
+        relative = "editor",
+        position = {
+            col = "5%",
+            row = 0,
+        },
+        size = {
+            width = "30%",
+            height = 10,
+        }
+    }
+
+    -- NOTE: each component is its own window, with a different window ID
+    -- Layout.Box(popup1, { size = { width = "30%", height = #lines + 2} }),
+
+    local input_layout = Layout({
+        size = { height = 10, width = "50%"},
+        anchor = "NW",
+        position = {
+            -- the percentages are out of width and height of the layout
+            col = 0.5 * win_width,
+            row = 0,
+        },
+        relative = "editor",
+    },
+
+    Layout.Box(
+        {
+
+
+            Layout.Box(
+                {
+                    Layout.Box(
+                        -- cmd_title_input, { size = cmd_title_input_opt.size }),
+                        cmd_title_input, { size = { height = "50%", width = "100%"} }
+                    ),
+
+
+                    Layout.Box(
+                        cmd_content_input, { size = { height = "50%", width = "100%"} })
+                    },
+                    { dir = "col", size = {width = "80%", height = "100%" } }
+                ),
+            },
+
+            {
+                dir = "row",
+                size = { height = 10, width = "100%"}
+            }
+        )
+    )
+
+
+    cmd_title_input:map("i", "<C-h>", function ()
+        cur_win_index = cur_win_index - 1
+        vim.api.nvim_set_current_win(windows[cur_win_index])
+        input_layout:unmount()
+    end)
+
+    cmd_content_input:map("i", "<C-h>", function ()
+        cur_win_index = cur_win_index - 1
+        vim.api.nvim_set_current_win(windows[cur_win_index])
+    end)
+
+
+    cmd_title_input:map("i", "<C-l>", function ()
+        cur_win_index = cur_win_index + 1
+        vim.api.nvim_set_current_win(windows[cur_win_index])
+    end)
+
+    cmd_content_input:map("i", "<C-l>", function ()
+        if cur_win_index < #windows then
+            cur_win_index = cur_win_index + 1
+            vim.api.nvim_set_current_win(windows[cur_win_index])
+        end
+    end)
+
+    cmd_display_popup:map("i", "<C-l>", function ()
+        if cur_win_index < #windows then
+            cur_win_index = cur_win_index + 1
+            vim.api.nvim_set_current_win(windows[cur_win_index])
+        end
+    end)
+
+    cmd_title_input:map("i", "<CR>", function ()
+        -- check if the two fields were filled in properly. If so, trim both values, store them inside the project and then update the display of commands
+
+    end)
+
+    input_layout:mount()
+
+    cmd_display_popup:update_layout(layout_opts)
+
+end
+
 local function create_layout()
     ---@type string[]
 
@@ -105,7 +258,7 @@ local function create_layout()
     local layout_boxes = {
         -- Layout.Box(popup1, { size = popup1_options.size }),
         -- NOTE: setting the `size` values for the poup here instead of the actual popup component makes the layout `size` field work
-        Layout.Box(popup1, { size = { width = "80%", height = 10} }),
+        Layout.Box(popup1, { size = { width = "100%", height = 10} }),
         -- layout.Box(input1, input_options),
         -- layout.Blox(popup2, { size = "50%"})
     }
@@ -114,27 +267,39 @@ local function create_layout()
     local layout_comp = Layout(
         {
             position = {
-                -- col = (win_width - popup1_options.size.width)/2,
                 col = "50%",
                 row = 0,
             },
             -- This `size` field is required, but doesn't seem to change anything when I set the sizes of components at creation moment
-            size = 40,
+            size = {
+                height = 10, width = "30%"
+            },
         },
 
         -- NOTE: the `grow` field determines if the components inside the layout will grow to fill the available space. If we set grow to 0, then the components will keep their original size
-        Layout.Box(layout_boxes, { size = "100%", dir = "col"} )
+        Layout.Box(layout_boxes, { grow = 0, dir = "col"} )
     )
 
 
 
     popup1:map("n", "a", function ()
+
+        expand_layout_with_prompt(popup1, win_width)
+
+        --[[
+
+
         -- here we want to:
         -- create two inputs
         --      - one containing the command name(map <CR> and <C-l> to switching the cursor to the next input)
         --      - the other one containing the actual shell command
         -- use layout:update() to append the inputs, since it can take any valid nui component as argument
         -- TODO: extract the popup with the command names to a variable and keep it inside every update of the layout. Place the two inputs below this popup. Organize this stuff a little, so it's not a huge mess
+
+
+
+        local cur_win_index = 1
+        local windows = {vim.api.nvim_get_current_win()}
 
         local input_options_common = {
                 -- border = {
@@ -180,48 +345,115 @@ local function create_layout()
                 }
             )
 
+            cmd_title_input:on("WinEnter", function ()
+                cur_win_index = 2
+                windows[2] = vim.api.nvim_get_current_win()
+                print("New win: " .. windows[2] .. '\n')
+            end)
+
+
+            cmd_content_input:on("WinEnter", function ()
+                cur_win_index = 3
+                windows[3] = vim.api.nvim_get_current_win()
+                print("New win: " .. windows[3] .. '\n')
+            end)
+
+            cmd_title_input:map("i", "<C-h>", function ()
+                cur_win_index = cur_win_index - 1
+                vim.api.nvim_set_current_win(windows[cur_win_index])
+            end)
+            cmd_content_input:map("i", "<C-h>", function ()
+                cur_win_index = cur_win_index - 1
+                vim.api.nvim_set_current_win(windows[cur_win_index])
+            end)
+
             local layout_opts = {
                 position = {
-                    col = 0,
+                    col = "5%",
                     row = 0,
                 },
                 size = {
-                    width = win_width,
-                    height = 100,
+                    width = "30%",
+                    height = 10,
                 }
             }
 
             -- NOTE: each component is its own window, with a different window ID
+            -- Layout.Box(popup1, { size = { width = "30%", height = #lines + 2} }),
+
+            local input_layout = Layout({
+                size = { height = 10, width = "50%"},
+                anchor = "NW",
+                position = {
+                    -- the percentages are out of width and height of the layout
+                    col = 0.5 * win_width,
+                    row = 1,
+                },
+                relative = "editor",
+            },
+
+            Layout.Box(
+                {
+
+
+                    Layout.Box(
+                        {
+                            Layout.Box(
+                                -- cmd_title_input, { size = cmd_title_input_opt.size }),
+                                cmd_title_input, { size = { height = "50%", width = "100%"} }
+                            ),
+
+
+                            Layout.Box(
+                                cmd_content_input, { size = { height = "50%", width = "100%"} })
+                            },
+                            { dir = "col", size = {width = "80%", height = "100%" } }
+                        ),
+                    },
+
+                    {
+                        dir = "row",
+                        size = { height = 10, width = "100%"}
+                    }
+                )
+            )
+
+
+            input_layout:mount()
 
             layout_comp:update(
-                layout_opts,
-                Layout.Box(
-                    {
-                        Layout.Box(popup1, { size = { width = "30%", height = #lines + 2} }),
+                layout_opts)
+                -- layout_opts<
+            --     Layout.Box(
+            --         {
 
 
-                        Layout.Box(
-                            {
-                                Layout.Box(
-                                    -- cmd_title_input, { size = cmd_title_input_opt.size }),
-                                    cmd_title_input, { size = { height = "50%", width = "100%"} }
-                                ),
+            --             Layout.Box(
+            --                 {
+            --                     Layout.Box(
+            --                         -- cmd_title_input, { size = cmd_title_input_opt.size }),
+            --                         cmd_title_input, { size = { height = "50%", width = "100%"} }
+            --                     ),
 
 
-                                Layout.Box(
-                                    cmd_content_input, { size = { height = "50%", width = "100%"} })
-                                },
-                                { dir = "col", size = {width = "60%", height = 10 } }
-                            ),
-                            },
+            --                     Layout.Box(
+            --                         cmd_content_input, { size = { height = "50%", width = "100%"} })
+            --                     },
+            --                     { dir = "col", size = {width = "60%", height = 10 } }
+            --                 ),
+            --                 },
 
-                            {
-                                dir = "row",
-                                -- size = { height = 10, width = "100%"}
-                            }
-                        )
-                    )
 
+            --                     dir = "row",
+            --                     -- size = { height = 10, width = "100%"}
+            --                 }
+            --             )
+            --         )
+
+            
+
+
+            --]]
 end, {})
 
 
